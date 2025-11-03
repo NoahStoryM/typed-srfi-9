@@ -4,11 +4,10 @@
          "private/define-record-type.rkt"
          "private/type-descriptors.rkt")
 
-(provide <record>
+(provide define-record-type
+         record
          record?
-         define-record-type
          Record-TypeTop
-         record:<record>
          record-type-descriptor?
          record-type-descriptor
          record-type-parent

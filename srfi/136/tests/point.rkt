@@ -3,10 +3,10 @@
 (require "../../136.rkt" typed/rackunit)
 
 (begin
-  (define-record-type Point #f #f))
+  (define-record-type <Point> #f #f))
 
 (begin
-  (define-record-type () (Point-0 Point)
+  (define-record-type () (<Point-0> <Point>)
     (make-point-0)
     point-0?)
   (define point-0 (make-point-0))
@@ -14,7 +14,7 @@
   (check-pred point-0? point-0))
 
 (begin
-  (define-record-type (-t1 +t1) (Point-1 Point-0)
+  (define-record-type (-t1 +t1) (<Point-1> <Point-0>)
     (make-point-1 [p1 : +t1 -t1])
     point-1?
     [p1 get-p1 set-p1!])
@@ -28,7 +28,7 @@
   (check-eqv? (get-p1 point-1) -1))
 
 (begin
-  (define-record-type (-t1 +t1 -t2 +t2) (Point-2 Point-1)
+  (define-record-type (-t1 +t1 -t2 +t2) (<Point-2> <Point-1>)
     (make-point-2 [p1 : +t1 -t1] [p2 : +t2 -t2])
     point-2?
     [p2 get-p2 set-p2!])

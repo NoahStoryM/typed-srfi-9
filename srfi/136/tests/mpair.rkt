@@ -3,7 +3,7 @@
 (require "../../136.rkt" typed/rackunit)
 
 (begin
-  (define-record-type (-t1 +t1) Mutable-Box
+  (define-record-type (-t1 +t1) <Mutable-Box>
     (box [v : +t1 -t1])
     box?
     [v unbox set-box!])
@@ -19,7 +19,7 @@
   (check-eqv? (unbox b) 0))
 
 (begin
-  (define-record-type (-t1 +t1 -t2 +t2) Mutable-Pair
+  (define-record-type (-t1 +t1 -t2 +t2) <Mutable-Pair>
     (make-mpair [b1 : (Mutable-Box -t1 +t1)]
                 [b2 : (Mutable-Box -t2 +t2)])
     mpair?

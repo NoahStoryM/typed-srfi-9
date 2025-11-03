@@ -13,6 +13,16 @@
 
 
 (begin-for-syntax
+  (define (<record>->record sym)
+    ;; Extract `record' from a symbol of the form `<record>'
+    (define str (symbol->string sym))
+    (define len (string-length str))
+    (unless (and (> len 0)
+                 (eq? (string-ref str 0) #\<)
+                 (eq? (string-ref str (sub1 len)) #\>))
+      (raise-argument-error '<record>->record "<type name>?" sym))
+    (string->symbol (substring str 1 (sub1 len))))
+
   (define-values (variance->top-type variance->bot-type)
     ;; Determine the Top type and Bottom Type based on variance annotation
     ;; If type parameter starts with '-', it's contravariant
@@ -46,12 +56,12 @@
 
   (define-syntax-class type-spec
     ;; Syntax class for type specification
-    [pattern (~or* name:id (name:id #f))
-             #:with this #'name
-             #:with super #'<record>]
-    [pattern (name:id parent:id)
-             #:with this #'name
-             #:with super #'parent])
+    [pattern (~or* <name>:id (<name>:id #f))
+             #:with <this> #'<name>
+             #:with <super> #'<record>]
+    [pattern (<name>:id <parent>:id)
+             #:with <this> #'<name>
+             #:with <super> #'<parent>])
 
   (define-syntax-class type-para
     ;; Syntax class for type parameters with variance annotations
@@ -143,18 +153,19 @@
         (~or* #f (make-record:id . field-tags))
         (~or* #f record?:id)
         field-spec*:spec ...)
+     #:with ..0 (datum->syntax stx '...)
      #:with (t:type-para ...) (if (attribute ts) #'(ts ...) #'())
      #:with (field-tag*:tag ...) (if (attribute field-tags) #'field-tags #'())
-     #:with This:id    #'T.this
-     #:with <Super>:id #'T.super
-     #:with struct-<This>:id (format-id #f "struct:~a" #'This)
-     #:with <This>:id        (format-id #f "~a"  #'This)
-     #:with This?:id         (format-id #f "~a?" #'This)
-     #:with makeThis:id      (format-id #f "make~a" #'This)
-     #:with record-This:id (format-id stx "record:~a" #'This)
-     #:with ThisTop:id (format-id #'This "~aTop" #'This)
-     #:with ThisBot:id (format-id #'This "~aBot" #'This)
-     #:with (t0:id ...) (datum->syntax #'This (remove-duplicates (syntax->datum #'(t.base ...))))
+     #:with <this>:id  #'T.<this>
+     #:with This:id (datum->syntax #'T (<record>->record (syntax-e #'<this>)))
+     #:with ThisTop:id (format-id #'T "~aTop" #'This)
+     #:with ThisBot:id (format-id #'T "~aBot" #'This)
+     #:with this:id (datum->syntax #f (<record>->record (syntax-e #'<this>)))
+     #:with struct-this:id (format-id #f "struct:~a" #'this)
+     #:with this?:id       (format-id #f "~a?" #'this)
+     #:with <super>:id #'T.<super>
+     #:with Super:id (datum->syntax #'T (<record>->record (syntax-e #'<super>)))
+     #:with (t0:id ...) (datum->syntax #'T (remove-duplicates (syntax->datum #'(t.base ...))))
      #:with ((field-tag:tag . field-spec:spec) ...)
      ;; Match field specifications with field tags
      (let ([data-hash
@@ -173,7 +184,7 @@
           (cons field-tag field-spec))))
      #:with field-def*
      (generate-field-definitions
-      #'This
+      #'T
       (syntax-e #'This)
       (syntax-e (if (attribute ts) #'ThisTop #'This))
       (syntax-e #'(t ...))
@@ -182,32 +193,42 @@
        (begin
          (define struct-inspector (current-inspector))
          (current-inspector record-type-inspector) ; FIXME `#:inspector record-type-inspector'
-         (struct (t ...) <This> <Super>
+         (struct (t ...) this Super
            (field-tag.spec ...)
-           #:constructor-name makeType
+           #:constructor-name make-this
            #:type-name This)
-         (define record-This (std->rtd struct-<This>))
          (current-inspector (cast struct-inspector Inspector)) ; FIXME no `cast'
+
+         (define record-this (std->rtd struct-this))
+         (define-syntax <this>
+           (syntax-rules ()
+             [(_) (cast record-this Record-TypeTop)] ; FIXME no `cast'
+             [(_ (f e ..0))
+              (f e ..0
+                 #,(and (not (free-identifier=? #'<super> #'<record>))
+                        #'<super>)
+                 field-spec* ...)]))
+
          #,@(if (attribute ts)
                 ;; Type definitions for polymorphic case
                 #`((define-type ThisTop (This t.Top ...))
                    (define-type ThisBot (This t.Bot ...))
                    #,@(if (attribute make-record)
                           #'((: make-record (∀ (t0 ...) (→ field-tag*.r0 ... (This t.base ...))))
-                             (define (make-record field-tag*.id ...) (makeType field-tag*.op ...)))
+                             (define (make-record field-tag*.id ...) (make-this field-tag*.op ...)))
                           #'())
                    .
                    #,(if (attribute record?)
-                         #'((define record? (cast This? (pred ThisTop))))
+                         #'((define record? (cast this? (pred ThisTop))))
                          #'()))
                 ;; Type definitions for non-polymorphic case
                 #`(#,@(if (attribute make-record)
                           #'((: make-record (→ field-tag*.r0 ... This))
-                             (define (make-record field-tag*.id ...) (makeType field-tag*.op ...)))
+                             (define (make-record field-tag*.id ...) (make-this field-tag*.op ...)))
                           #'())
                    .
                    #,(if (attribute record?)
-                         #'((define record? This?))
+                         #'((define record? this?))
                          #'())))
          .
          field-def*))]))

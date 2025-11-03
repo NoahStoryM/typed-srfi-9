@@ -35,17 +35,19 @@ is a subtype of @racket[(F w1 r1)] if and only if:
 
 @section{API Reference}
 
+@subsection{Defining Record Types}
+
 @defform[#:literals (:)
-         (define-record-type maybe-type-vars type-spec
+         (define-record-type maybe-type-vars descriptor-spec
            constructor-spec
            predicate-spec
            field-spec ...)
          #:grammar
          ([maybe-type-vars (code:line)
                            (v ...)]
-          [type-spec type-name
-                     (type-name #f)
-                     (type-name parent)]
+          [descriptor-spec <this>
+                           (<this> #f)
+                           (<this> <super>)]
           [constructor-spec #f
                             (constructor-name field-tag ...)]
           [predicate-spec #f
@@ -56,7 +58,6 @@ is a subtype of @racket[(F w1 r1)] if and only if:
                       [field-name accessor-name mutator-name]])]{
 Defines a new @deftech{record type} with optional type parameters and
 @tech{variance} annotations.
-
 @itemlist[
   @item{@racket[v] is a type parameter. It uses prefix notation to indicate
         @tech{variance}:
@@ -67,13 +68,14 @@ Defines a new @deftech{record type} with optional type parameters and
                 @tech{Covariant} parameter. Top type is @racket[Any], bottom type
                 is @racket[Nothing].}
           ]}
-  @item{@racket[type-spec] specifies the @tech{record type} name and optional
-        @racket[parent]:
+  @item{@racket[descriptor-spec] specifies the @deftech{record type descriptor}
+        name (in angle brackets like @racket[<this>]) and optional @racket[<super>]:
         @itemlist[
-          @item{@racket[type-name] or @racket[(type-name #f)]: defines a new
-                base @tech{record type}.}
-          @item{@racket[(type-name parent)]: defines a @tech{record type} that
-                @deftech{inherit}s from @racket[parent], including all its fields}
+          @item{@racket[<this>] or @racket[(<this> #f)]:
+                defines a new base @tech{record type}.}
+          @item{@racket[(<this> <super>)]:
+                defines a @tech{record type} that @deftech{inherit}s from
+                @racket[super], including all its fields}
           ]}
   @item{@racket[constructor-name] is the name of the constructor procedure.
         If @racket[#f], no constructor is generated.}
@@ -96,21 +98,23 @@ Defines a new @deftech{record type} with optional type parameters and
   ]
 
 This form defines the following:
-
 @itemlist[
-  @item{A struct type named @racket[type-name] that optionally extends
-        @racket[parent].}
+  @item{A struct type named @racket[this] that optionally extends
+        @racket[super].}
   @item{Type aliases (if the type parameters are not @racket[()]):
         @itemlist[
-          @item{@racket[type-name]@racketidfont{Top}: all parameters at their top bound
+          @item{@racket[this]@racketidfont{Top}: all parameters at their top bound
                 (e.g., @racket[Any] for @tech{covariant}, @racket[Nothing] for @tech{contravariant}).}
-          @item{@racket[type-name]@racketidfont{Bot}: all parameters at their bottom bound
+          @item{@racket[this]@racketidfont{Bot}: all parameters at their bottom bound
                 (e.g., @racket[Nothing] for @tech{covariant}, @racket[Any] for @tech{contravariant}).}
           ]}
-  @item{A @racket[constructor-name] procedure (if not @racket[#f]) to create instances.
-        For mutable fields, the @racket[write-type] must be a subtype of the
-        @racket[read-type]. To satisfy this subtyping constraint from the very
-        beginning in the simplest way, the @tech{variance} prefixes
+  @item{A macro @racket[<this>]: @racket[(<this>)] expands to the
+        @tech{record type descriptor}, and @racket[(<this> (f e ...))]
+        expands to @racket[(f e ... <super> field-spec ...)].}
+  @item{A @racket[constructor-name] procedure (if not @racket[#f]) to create
+        instances. For mutable fields, the @racket[write-type] must be a subtype
+        of the @racket[read-type]. To satisfy this subtyping constraint from the
+        very beginning in the simplest way, the @tech{variance} prefixes
         (@litchar{-} and @litchar{+}) are stripped from the type parameters
         when generating the constructor's type.}
   @item{A @racket[predicate-name] procedure (if not @racket[#f]) that tests for
@@ -120,23 +124,11 @@ This form defines the following:
   ]
 }
 
-@defproc[(record? [v Any]) Boolean]{
-Returns @racket[#t] if @racket[v] is an instance of a record,
-@racket[#f] otherwise.
-}
-
-@typed-srfi-136-examples[
-(:print-type record?)
-]
-
-@section{Examples}
-
-@subsection{Mutable Boxes and Pairs}
+@subsubsection{Mutable Boxes and Pairs}
 
 A simple mutable box demonstrating @tech{variance}, and a mutable pair composed
 from mutable boxes, illustrating how @tech{variance} propagates through nested
 data structures. The type @racket[(Mutable-Box Natural Integer)] means:
-
 @itemlist[
   @item{You can @italic{write} values of type @racket[Natural] (or any subtype)
         into the box, demonstrating @deftech{contravariance} of the write type.}
@@ -145,7 +137,7 @@ data structures. The type @racket[(Mutable-Box Natural Integer)] means:
   ]
 
 @typed-srfi-136-examples[
-(define-record-type (-t1 +t1) Mutable-Box
+(define-record-type (-t1 +t1) <Mutable-Box>
   (BOX [v : +t1 -t1])
   BOX?
   [v UNBOX SET-BOX!])
@@ -163,7 +155,7 @@ data structures. The type @racket[(Mutable-Box Natural Integer)] means:
 (SET-BOX! b 0)
 (UNBOX b)
 
-(define-record-type (-t1 +t1 -t2 +t2) Mutable-Pair
+(define-record-type (-t1 +t1 -t2 +t2) <Mutable-Pair>
   (make-mpair [b1 : (Mutable-Box -t1 +t1)]
               [b2 : (Mutable-Box -t2 +t2)])
   MPAIR?
@@ -200,14 +192,15 @@ data structures. The type @racket[(Mutable-Box Natural Integer)] means:
 (SET-MCDR! p 0)
 (MCDR p)
 ]
-@subsection{Inheritance}
+
+@subsubsection{Inheritance}
 
 A hierarchy of point types with increasingly dimensions:
 
 @typed-srfi-136-examples[
-(define-record-type Point #f #f)
+(define-record-type <point> #f #f)
 
-(define-record-type () (Point-0 Point)
+(define-record-type () (<point-0> <point>)
   (make-point-0)
   point-0?)
 
@@ -217,7 +210,7 @@ A hierarchy of point types with increasingly dimensions:
 (define p0 (make-point-0))
 (point-0? p0)
 
-(define-record-type (-t1 +t1) (Point-1 Point-0)
+(define-record-type (-t1 +t1) (<point-1> <point-0>)
   (make-point-1 [p1 : +t1 -t1])
   point-1?
   [p1 get-p1 set-p1!])
@@ -235,7 +228,7 @@ A hierarchy of point types with increasingly dimensions:
 (set-p1! p1 -1)
 (get-p1 p1)
 
-(define-record-type (-t1 +t1 -t2 +t2) (Point-2 Point-1)
+(define-record-type (-t1 +t1 -t2 +t2) (<point-2> <point-1>)
   (make-point-2 [p1 : +t1 -t1] [p2 : +t2 -t2])
   point-2?
   [p2 get-p2 set-p2!])
@@ -258,3 +251,151 @@ A hierarchy of point types with increasingly dimensions:
 (set-p2! p2 -2)
 (get-p2 p2)
 ]
+
+@subsection{Base Record Type}
+
+@deftype[record]{
+Any @tech{record type} value.
+}
+
+@deftype[Record-TypeTop]{
+Any @tech{record type descriptor} value.
+}
+
+@defproc[(record? [v Any]) Boolean]{
+Returns @racket[#t] if @racket[v] is an instance of a @tech{record type},
+@racket[#f] otherwise.
+
+@typed-srfi-136-examples[
+(:print-type record?)
+(define-record-type <example> (make-example) example?)
+(:print-type make-example)
+(:print-type example?)
+(record? (make-example))
+]
+}
+
+@defproc[(record-type-descriptor? [v Any]) Boolean]{
+Returns @racket[#t] if @racket[v] is an instance of a @tech{record type descriptor},
+@racket[#f] otherwise.
+
+@typed-srfi-136-examples[
+(:print-type record-type-descriptor?)
+(define-record-type <example> #f #f)
+(record-type-descriptor? (<example>))
+]
+}
+
+@defproc[(record-type-descriptor [rt record]) Record-TypeTop]{
+Given a @tech{record type} instance @racket[rt], returns its descriptor.
+
+@typed-srfi-136-examples[
+(:print-type record-type-descriptor)
+(define-record-type <example> (make-example) #f)
+(record-type-descriptor (make-example))
+]
+}
+
+@defproc[(record-type-parent [rtd Record-TypeTop]) (Option Record-TypeTop)]{
+Returns the parent @tech{record type descriptor} of @racket[rtd], or @racket[#f]
+if there is no parent.
+
+@typed-srfi-136-examples[
+(:print-type record-type-parent)
+(define-record-type <example> #f #f)
+(record-type-parent (<example>))
+(define-record-type (<instance> <example>) #f #f)
+(record-type-parent (<instance>))
+]
+}
+
+@defproc[(record-type-name [rtd Record-TypeTop]) Symbol]{
+Returns the name of the @tech{record type} represented by @racket[rtd].
+
+@typed-srfi-136-examples[
+(:print-type record-type-name)
+(define-record-type <example> #f #f)
+(record-type-name (<example>))
+]
+}
+
+@defproc[(record-type-constructor [rtd Record-TypeTop]) Procedure]{
+Returns a constructor procedure to create instances of the type for
+@tech{record type}.
+
+@typed-srfi-136-examples[
+(:print-type record-type-constructor)
+(define-record-type <example> #f #f)
+(record-type-constructor (<example>))
+]
+}
+
+@defproc[(record-type-predicate [rtd Record-TypeTop]) Procedure]{
+Returns a predicate procedure to recognize instances of the type for
+@tech{record type}.
+
+@typed-srfi-136-examples[
+(:print-type record-type-predicate)
+(define-record-type <example> #f #f)
+(record-type-predicate (<example>))
+]
+}
+
+@defproc[(record-type-fields [rtd Record-TypeTop])
+         (Listof (List Symbol Procedure Procedure))]{
+Returns a list describing the fields of the record type @racket[rtd].
+Each field is represented as a list of three elements:
+@itemlist[
+  @item{A symbol representing the field name
+        (@bold{warning}: this feature is not currently supported).}
+  @item{An accessor procedure for reading the field value.}
+  @item{A mutator procedure for writing the field value.}
+  ]
+
+@typed-srfi-136-examples[
+(:print-type record-type-fields)
+(define-record-type <example>
+  (make-example [v1 : Integer Natural] [v2 : Symbol])
+  #f
+  [v2 get-v2]
+  [v1 get-v1 set-v1!])
+(record-type-fields (<example>))
+]
+}
+
+@defproc*[([(make-record-type-descriptor
+             [name Symbol]
+             [fieldspecs (Listof (∪ Symbol (List (∪ 'immutable 'mutable) Symbol)))])
+            Record-TypeTop]
+           [(make-record-type-descriptor
+             [name Symbol]
+             [fieldspecs (Listof (∪ Symbol (List (∪ 'immutable 'mutable) Symbol)))]
+             [super-type Record-TypeTop])
+            Record-TypeTop])]{
+Creates a new @tech{record type descriptor} with the given @racket[name], field
+specifications @racket[fieldspecs], and optional parent descriptor @racket[super-type].
+
+Each element of @racket[fieldspecs] can be:
+@itemlist[
+  @item{@racket[name] or @racket[(list 'immutable name)],
+        representing an immutable field.}
+  @item{@racket[(list 'mutable name)], representing a mutable field.}
+  ]
+
+@typed-srfi-136-examples[
+(:print-type make-record-type-descriptor)
+(make-record-type-descriptor 'example '())
+]
+}
+
+@defproc[(make-record [rtd Record-TypeTop] [field-vector VectorTop]) record]{
+Creates a new @tech{record type} instance of the described by @racket[rtd], with
+field values taken from @racket[field-vector]. @racket[field-vector] must contain
+exactly one value for each field in the record type (including inherited fields).
+
+@typed-srfi-136-examples[
+(:print-type make-record)
+(define-record-type <example> #f #f)
+(make-record (<example>) #())
+]
+}
