@@ -391,7 +391,8 @@ Each element of @racket[fieldspecs] can be:
 @defproc[(make-record [rtd Record-TypeTop] [field-vector VectorTop]) record]{
 Creates a new @tech{record type} instance of the described by @racket[rtd], with
 field values taken from @racket[field-vector]. @racket[field-vector] must contain
-exactly one value for each field in the record type (including inherited fields).
+exactly one value for each field in the @tech{record type}
+(including inherited fields).
 
 @typed-srfi-136-examples[
 (:print-type make-record)
